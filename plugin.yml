@@ -1,0 +1,9 @@
+name: APIConverter
+version: 1.0
+main: Enes5519\APIConverter\APIConverter
+api: 3.0.1
+author: Enes5519
+
+commands:
+  apiconvert:
+    description: APIConverter command
