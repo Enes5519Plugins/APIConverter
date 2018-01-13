@@ -70,10 +70,42 @@ class APIConverter extends PluginBase{
                     if($object->getExtension() == "php"){
                         $dosya = file_get_contents($object->getRealPath());
                         // PHP 7.2 to PHP 7.0
-                        $dosya = str_replace([":void", ": void"], [" ", " "], $dosya);
-                        $dosya = preg_replace("/:.*\?\w+/i", " ", $dosya); // dönüş tiplerinde ? işareti varsa siler dönüş tipini
-                        // TODO : Eğer fonksiyon içinde ? işareti varsa kaldır
-                        // TODO : onCommand string ekle
+                        $dosya = str_replace([":void", ": void"], ["", ""], $dosya);
+                        $dosya = preg_replace("/:.*\?\w+/i", "", $dosya); // dönüş tiplerinde ? işareti varsa siler dönüş tipini
+                        $lines = explode("\n", $dosya);
+                        foreach($lines as $li => $line){
+                            if(stripos($line, "function onCommand(CommandSender") !== false or stripos($line, "function execute(CommandSender") !== false){
+                                $pa = substr($line, strpos($line, "("), strpos($line, ")"));
+                                $words = explode(",", $pa);
+                                if(strpos($line, "function onCommand") !== false){
+                                    $index = 2;
+                                }else{
+                                    $index = 1;
+                                }
+                                $label = $words[$index] ?? "string";
+                                if(stripos($label, "string") === false){
+                                    $words[$index] = " string " . $label;
+                                }
+
+                                $lines[$li] = str_ireplace($pa, implode(",", $words), $line);
+                            }elseif(($i = stripos($line, "?")) !== false and strpos($line, "function") !== false){
+                                $next = substr($line, $i, $i + 1);
+                                if($next !== " "){
+                                    $zd = substr($line, strpos($line, "("), strpos($line, ")"));
+                                    $words = explode(",", $zd);
+                                    foreach($words as $wi => $word){
+                                        if(strpos($word, "?") !== false){
+                                            $dsh = explode('$', $word);
+                                            if(count($dsh) > 1){
+                                                $words[$wi] = '$' . $dsh[1];
+                                            }
+                                        }
+                                    }
+                                    $lines[$li] = str_ireplace($zd, "(" . implode(",", $words), $line);
+                                }
+                            }
+                        }
+                        $dosya = implode("\n", $lines);
                         file_put_contents($object->getRealPath(), $dosya);
                     }
                 }
