@@ -22,10 +22,40 @@ use pocketmine\plugin\PluginBase;
 use pocketmine\plugin\PluginDescription;
 
 class APIConverter extends PluginBase{
+	
+	  protected $pmnp = [];
 
     public function onEnable(){
         @mkdir($this->getDataFolder());
         $this->getServer()->getLogger()->directSend("\n§8» §bThank you for using Turanic API Converter ♥ by Enes5519.\n§8» §eThis plugin is only for plugins that are in source plugins there are not compiled.\n");
+        
+        $this->calculateNameSpaces("src/pocketmine/");
+    }
+    
+    // NOTE: Working only Source Server Files(not phar)
+    public function calculateNameSpaces(string $dir){
+    	if(!is_dir($dir)) return false;
+    	$entries = scandir($dir);
+    	foreach($entries as $e){
+    		if($e !== "." and $e !== ".."){
+    			$path = $dir . $e;
+    			if(is_file($path)){
+    				$n = basename($e, ".php");
+    				$this->pmnp[$n] = str_replace("src/", "", $dir . $n);
+    			}else{
+    				$this->calculateNameSpaces($path . "/");
+    			}
+    		}
+    	}
+    }
+    
+    public function findNameSpace(string $line){
+    	foreach($this->pmnp as $b => $np){
+    		if(strpos($line, $b) !== false){
+    			return str_replace("/", "\\", $np);
+    		}
+    	}
+    	return null;
     }
 
     public function onCommand(CommandSender $sender, Command $command, string $label, array $args){
@@ -53,11 +83,9 @@ class APIConverter extends PluginBase{
     }
 
     public function convertPlugin($file){
-        if(is_dir($file) and file_exists($file . "/plugin.yml") and file_exists($file . "/src/")){
-            $plugin = $this->getPluginDescription($file);
-            if($plugin instanceof PluginDescription){
-                $pluginName = $plugin->getName();
-                if($pluginName == $this->getDescription()->getName()) return false;
+        if(is_dir($file) and file_exists($file . "/src/")){
+            if($this->isValidForConvert($file)){
+            	$pluginName = basename($file);
                 $this->getLogger()->notice("Converting API for $pluginName started.");
                 $this->createBackup($file, $pluginName);
 
@@ -74,34 +102,48 @@ class APIConverter extends PluginBase{
                         $dosya = preg_replace("/:.*\?\w+/i", "", $dosya); // dönüş tiplerinde ? işareti varsa siler dönüş tipini
                         $lines = explode("\n", $dosya);
                         foreach($lines as $li => $line){
-                            if(stripos($line, "function onCommand(CommandSender") !== false or stripos($line, "function execute(CommandSender") !== false){
-                                $pa = substr($line, strpos($line, "("), strpos($line, ")"));
+                        	if(stripos($line, "use") !== false){
+                        		$np = $this->findNameSpace($line);
+                        		$abc = explode(" ", $line);
+                        		$road = $abc[1] ?? null;
+                        		if($road !== null and $np !== null){
+                        			$x = substr($road, strlen($road) - 1, strlen($road)) === ";" ? ";" : "";
+                        			$abc[1] = $np . $x;
+                        		}
+                        		$lines[$li] = implode(" ", $abc);
+                        	}
+                        	
+                        	if(stripos($line, "function onCommand(CommandSender") !== false or stripos($line, "function execute(CommandSender") !== false){
+                        	    $pa = substr($line, strpos($line, "("), strpos($line, ")"));
                                 $words = explode(",", $pa);
                                 if(strpos($line, "function onCommand") !== false){
-                                    $index = 2;
+                                	$index = 2;
                                 }else{
-                                    $index = 1;
+                                	$index = 1;
                                 }
                                 $label = $words[$index] ?? "string";
                                 if(stripos($label, "string") === false){
-                                    $words[$index] = " string " . $label;
+                                	$words[$index] = " string " . $label;
                                 }
-
+                                
                                 $lines[$li] = str_ireplace($pa, implode(",", $words), $line);
-                            }elseif(($i = stripos($line, "?")) !== false and strpos($line, "function") !== false){
-                                $next = substr($line, $i, $i + 1);
+                        	}elseif(stripos($line, 'function onRun($') !== false){
+                        	       $pa = substr($line, strpos($line, "(") +1, strpos($line, ")"));
+                                $lines[$li] = str_ireplace($pa, 'int ' . $pa, $line);
+                        	}elseif(($i = stripos($line, "?")) !== false and strpos($line, "function") !== false){
+                        	    $next = substr($line, $i, $i + 1);
                                 if($next !== " "){
                                     $zd = substr($line, strpos($line, "("), strpos($line, ")"));
                                     $words = explode(",", $zd);
                                     foreach($words as $wi => $word){
-                                        if(strpos($word, "?") !== false){
-                                            $dsh = explode('$', $word);
-                                            if(count($dsh) > 1){
-                                                $words[$wi] = '$' . $dsh[1];
+                                      if(strpos($word, "?") !== false){
+                                        $dsh = explode('$', $word);
+                                                if(count($dsh) > 1){
+                                                    $words[$wi] = '$' . $dsh[1];
+                                                }
                                             }
                                         }
-                                    }
-                                    $lines[$li] = str_ireplace($zd, "(" . implode(",", $words), $line);
+                                        $lines[$li] = str_ireplace($zd, "(" . implode(",", $words), $line);
                                 }
                             }
                         }
@@ -118,15 +160,8 @@ class APIConverter extends PluginBase{
         return false;
     }
 
-    public function getPluginDescription($file){
-        if(is_dir($file) and file_exists($file . "/plugin.yml")){
-            $yaml = @file_get_contents($file . "/plugin.yml");
-            if($yaml != ""){
-                return new PluginDescription($yaml);
-            }
-        }
-
-        return null;
+    public function isValidForConvert(string $file) : bool{
+        return basename($file . "/") !== basename($this->getDataFolder());
     }
 
     public function createBackup(string $file, string $pluginName){
