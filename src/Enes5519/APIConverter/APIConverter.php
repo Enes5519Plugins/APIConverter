@@ -19,11 +19,10 @@ namespace Enes5519\APIConverter;
 use pocketmine\command\Command;
 use pocketmine\command\CommandSender;
 use pocketmine\plugin\PluginBase;
-use pocketmine\plugin\PluginDescription;
 
 class APIConverter extends PluginBase{
 	
-	  protected $pmnp = [];
+    protected $pmnp = [];
 
     public function onEnable(){
         @mkdir($this->getDataFolder());
@@ -43,7 +42,7 @@ class APIConverter extends PluginBase{
     				$n = basename($e, ".php");
     				$this->pmnp[$n] = str_replace("src/", "", $dir . $n);
     			}else{
-    				$this->calculateNameSpaces($path . "/");
+    				$this->calculateNameSpaces($path . DIRECTORY_SEPARATOR);
     			}
     		}
     	}
